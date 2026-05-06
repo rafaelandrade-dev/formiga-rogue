@@ -1,0 +1,17 @@
+# Godot cache e build
+.godot/
+/android/
+/ios/
+/export/
+
+# Arquivos temporários do Godot MCP e editor
+*.tmp
+godot_mcp_test_write.tmp
+
+# Configurações de export (podem conter dados sensíveis)
+export_presets.cfg
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini

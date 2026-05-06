@@ -1,0 +1,296 @@
+extends CharacterBody2D
+
+# ── Constants ─────────────────────────────────────────────────────────────────
+const SPEED            := 120.0
+const ACCELERATION     := 800.0
+const FRICTION         := 600.0
+const JUMP_VELOCITY    := -300.0
+const DOUBLE_JUMP_VEL  := -260.0
+const GRAVITY          := 900.0
+const COYOTE_TIME      := 0.1
+const JUMP_BUFFER_TIME := 0.1
+
+const DASH_SPEED       := 320.0
+const DASH_DURATION    := 0.15
+const DASH_COOLDOWN    := 0.8
+
+const ATK_L_DURATION   := 0.30
+const ATK_L_HIT_START  := 0.07   # hitbox on (seconds into state)
+const ATK_L_HIT_END    := 0.18   # hitbox off
+const ATK_L_CANCEL_AT  := 0.14   # allow combo buffer from here
+
+const ATK_H_DURATION   := 0.60
+const ATK_H_HIT_START  := 0.18
+const ATK_H_HIT_END    := 0.40
+
+const PARRY_DURATION   := 0.40
+const PARRY_DEFLECT    := 0.15   # active parry window (first N seconds)
+
+const HURT_DURATION    := 0.35
+const IFRAMES_DURATION := 0.60
+
+# ── State machine ─────────────────────────────────────────────────────────────
+enum State { IDLE, RUN, JUMP, ATTACK_LIGHT, ATTACK_HEAVY, PARRY, DASH, HURT, DEAD }
+
+var state      : State = State.IDLE
+var state_time : float = 0.0
+
+# ── Combat ────────────────────────────────────────────────────────────────────
+var combo_count  := 0
+var combo_buffer := false
+var hp           := 3
+var is_invincible:= false
+var iframes_timer:= 0.0
+
+# ── Movement ──────────────────────────────────────────────────────────────────
+var double_jump_used    := false
+var facing_right        := true
+var dash_cooldown_timer := 0.0
+var dash_dir            := 1.0
+var coyote_timer        := 0.0
+var jump_buffer_timer   := 0.0
+var was_on_floor        := false
+
+@onready var sprite   : Sprite2D         = $Sprite2D
+@onready var hitbox   : Area2D           = $Hitbox
+@onready var hb_shape : CollisionShape2D = $Hitbox/CollisionShape2D
+
+
+func _ready() -> void:
+	var img := Image.create(8, 12, false, Image.FORMAT_RGB8)
+	img.fill(Color(0.2, 0.8, 0.3))
+	sprite.texture = ImageTexture.create_from_image(img)
+	_set_hitbox(false)
+	hitbox.body_entered.connect(_on_hitbox_body_entered)
+
+
+func _physics_process(delta: float) -> void:
+	state_time += delta
+	_tick_iframes(delta)
+	_tick_dash_cooldown(delta)
+	_run_state(delta)
+
+
+# ── State dispatcher ──────────────────────────────────────────────────────────
+func _run_state(delta: float) -> void:
+	match state:
+		State.IDLE, State.RUN, State.JUMP:
+			_apply_gravity(delta)
+			_move(delta)
+			_handle_jump(delta)
+			if Input.is_action_just_pressed("dash"):
+				if dash_cooldown_timer <= 0.0:
+					_enter(State.DASH)
+					return
+			elif Input.is_action_just_pressed("attack_light"):
+				combo_count  = 0
+				combo_buffer = false
+				_enter(State.ATTACK_LIGHT)
+				return
+			elif Input.is_action_just_pressed("attack_heavy"):
+				combo_count = 0
+				_enter(State.ATTACK_HEAVY)
+				return
+			elif Input.is_action_just_pressed("parry"):
+				_enter(State.PARRY)
+				return
+			move_and_slide()
+			was_on_floor = is_on_floor()
+			_update_ground_state()
+
+		State.DASH:
+			velocity.x = dash_dir * DASH_SPEED
+			velocity.y = 0.0
+			if state_time >= DASH_DURATION:
+				velocity.x = 0.0
+				_enter(State.IDLE)
+			move_and_slide()
+			was_on_floor = is_on_floor()
+
+		State.ATTACK_LIGHT:
+			_apply_gravity(delta)
+			velocity.x = move_toward(velocity.x, 0.0, FRICTION * 2.0 * delta)
+			_set_hitbox(state_time >= ATK_L_HIT_START and state_time < ATK_L_HIT_END)
+			if state_time >= ATK_L_CANCEL_AT and Input.is_action_just_pressed("attack_light"):
+				combo_buffer = true
+			if state_time >= ATK_L_DURATION:
+				_set_hitbox(false)
+				if combo_buffer and combo_count < 3:
+					combo_buffer = false
+					_enter(State.ATTACK_LIGHT)
+				else:
+					combo_count  = 0
+					combo_buffer = false
+					_enter(State.IDLE)
+			move_and_slide()
+			was_on_floor = is_on_floor()
+
+		State.ATTACK_HEAVY:
+			_apply_gravity(delta)
+			velocity.x = move_toward(velocity.x, 0.0, FRICTION * 3.0 * delta)
+			_set_hitbox(state_time >= ATK_H_HIT_START and state_time < ATK_H_HIT_END)
+			if state_time >= ATK_H_DURATION:
+				_set_hitbox(false)
+				combo_count = 0
+				_enter(State.IDLE)
+			move_and_slide()
+			was_on_floor = is_on_floor()
+
+		State.PARRY:
+			velocity.x = move_toward(velocity.x, 0.0, FRICTION * 3.0 * delta)
+			_apply_gravity(delta)
+			if state_time >= PARRY_DURATION:
+				_enter(State.IDLE)
+			move_and_slide()
+			was_on_floor = is_on_floor()
+
+		State.HURT:
+			_apply_gravity(delta)
+			velocity.x = move_toward(velocity.x, 0.0, FRICTION * delta)
+			if state_time >= HURT_DURATION:
+				_enter(State.IDLE)
+			move_and_slide()
+			was_on_floor = is_on_floor()
+
+		State.DEAD:
+			_apply_gravity(delta)
+			velocity.x = move_toward(velocity.x, 0.0, FRICTION * delta)
+			move_and_slide()
+
+
+# ── State entry ───────────────────────────────────────────────────────────────
+func _enter(new_state: State) -> void:
+	if state in [State.ATTACK_LIGHT, State.ATTACK_HEAVY]:
+		_set_hitbox(false)
+	if state == State.DASH:
+		is_invincible = false
+		sprite.modulate.a = 1.0
+
+	state      = new_state
+	state_time = 0.0
+
+	match new_state:
+		State.ATTACK_LIGHT:
+			combo_count += 1
+			_position_hitbox()
+		State.ATTACK_HEAVY:
+			_position_hitbox()
+		State.DASH:
+			is_invincible = true
+			dash_dir      = 1.0 if facing_right else -1.0
+			velocity.y    = 0.0
+			dash_cooldown_timer = DASH_COOLDOWN
+		State.HURT:
+			is_invincible = true
+			iframes_timer = IFRAMES_DURATION
+
+
+# ── Movement helpers ──────────────────────────────────────────────────────────
+func _move(delta: float) -> void:
+	var dir := Input.get_axis("move_left", "move_right")
+	if dir != 0.0:
+		velocity.x   = move_toward(velocity.x, dir * SPEED, ACCELERATION * delta)
+		facing_right = dir > 0.0
+		sprite.flip_h = not facing_right
+	else:
+		velocity.x = move_toward(velocity.x, 0.0, FRICTION * delta)
+
+
+func _apply_gravity(delta: float) -> void:
+	if not is_on_floor():
+		velocity.y += GRAVITY * delta
+
+
+func _handle_jump(delta: float) -> void:
+	var on_floor := is_on_floor()
+	if was_on_floor and not on_floor:
+		coyote_timer = COYOTE_TIME
+	if on_floor:
+		coyote_timer     = 0.0
+		double_jump_used = false
+	elif coyote_timer > 0.0:
+		coyote_timer -= delta
+
+	if Input.is_action_just_pressed("jump"):
+		jump_buffer_timer = JUMP_BUFFER_TIME
+	if jump_buffer_timer > 0.0:
+		jump_buffer_timer -= delta
+
+	var can_ground := on_floor or coyote_timer > 0.0
+	if jump_buffer_timer > 0.0 and can_ground:
+		velocity.y        = JUMP_VELOCITY
+		jump_buffer_timer = 0.0
+		coyote_timer      = 0.0
+	elif Input.is_action_just_pressed("jump") and not can_ground and not double_jump_used:
+		velocity.y        = DOUBLE_JUMP_VEL
+		double_jump_used  = true
+		jump_buffer_timer = 0.0
+
+	if Input.is_action_just_released("jump") and velocity.y < 0.0:
+		velocity.y *= 0.4
+
+
+func _tick_dash_cooldown(delta: float) -> void:
+	if dash_cooldown_timer > 0.0:
+		dash_cooldown_timer -= delta
+
+
+func _tick_iframes(delta: float) -> void:
+	if iframes_timer <= 0.0:
+		return
+	iframes_timer -= delta
+	if state == State.HURT:
+		sprite.modulate.a = 0.0 if fmod(iframes_timer, 0.15) < 0.075 else 1.0
+	if iframes_timer <= 0.0 and state != State.DASH:
+		is_invincible     = false
+		sprite.modulate.a = 1.0
+
+
+func _update_ground_state() -> void:
+	if not is_on_floor():
+		if state != State.JUMP:
+			state = State.JUMP
+	else:
+		if state == State.JUMP:
+			state = State.IDLE
+		elif abs(velocity.x) > 4.0:
+			state = State.RUN
+		else:
+			state = State.IDLE
+
+
+func _set_hitbox(active: bool) -> void:
+	hb_shape.disabled = not active
+
+
+func _position_hitbox() -> void:
+	hitbox.position.x = 10.0 if facing_right else -10.0
+
+
+# ── Damage API ────────────────────────────────────────────────────────────────
+func receive_attack(damage: int, knockback: Vector2, attacker: Node) -> void:
+	if state == State.DEAD:
+		return
+	if state == State.PARRY and state_time <= PARRY_DEFLECT:
+		if attacker.has_method("receive_stagger"):
+			attacker.receive_stagger()
+		return
+	if is_invincible:
+		return
+	hp -= damage
+	velocity = knockback
+	if hp <= 0:
+		_enter(State.DEAD)
+	else:
+		_enter(State.HURT)
+
+
+# ── Hitbox hit detection ──────────────────────────────────────────────────────
+func _on_hitbox_body_entered(body: Node2D) -> void:
+	if body == self or not body.has_method("receive_hit"):
+		return
+	var is_heavy  := state == State.ATTACK_HEAVY
+	var dir       := 1.0 if facing_right else -1.0
+	var knockback := Vector2(dir * (200.0 if is_heavy else 80.0),
+	                         -100.0 if is_heavy else -40.0)
+	body.receive_hit(2 if is_heavy else 1, knockback)

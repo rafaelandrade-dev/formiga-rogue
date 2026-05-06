@@ -1,0 +1,59 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/player/Player.tscn" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/DummyEnemy.tscn" id="2"]
+
+[sub_resource type="RectangleShape2D" id="1"]
+size = Vector2(800, 12)
+
+[sub_resource type="RectangleShape2D" id="2"]
+size = Vector2(80, 8)
+
+[sub_resource type="RectangleShape2D" id="3"]
+size = Vector2(70, 8)
+
+[node name="TestLevel" type="Node2D"]
+
+[node name="Player" parent="." instance=ExtResource("1")]
+position = Vector2(80, 80)
+
+[node name="Camera2D" type="Camera2D" parent="Player"]
+
+[node name="DummyEnemy" parent="." instance=ExtResource("2")]
+position = Vector2(200, 80)
+
+[node name="Floor" type="StaticBody2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+position = Vector2(400, 176)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Floor"]
+shape = SubResource("1")
+
+[node name="Visual" type="Polygon2D" parent="Floor"]
+color = Color(0.35, 0.25, 0.15, 1)
+polygon = PackedVector2Array(-400, -6, 400, -6, 400, 6, -400, 6)
+
+[node name="Platform1" type="StaticBody2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+position = Vector2(80, 135)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Platform1"]
+shape = SubResource("2")
+
+[node name="Visual" type="Polygon2D" parent="Platform1"]
+color = Color(0.45, 0.35, 0.2, 1)
+polygon = PackedVector2Array(-40, -4, 40, -4, 40, 4, -40, 4)
+
+[node name="Platform2" type="StaticBody2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+position = Vector2(230, 115)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Platform2"]
+shape = SubResource("3")
+
+[node name="Visual" type="Polygon2D" parent="Platform2"]
+color = Color(0.45, 0.35, 0.2, 1)
+polygon = PackedVector2Array(-35, -4, 35, -4, 35, 4, -35, 4)
