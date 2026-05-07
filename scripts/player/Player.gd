@@ -15,16 +15,16 @@ const DASH_DURATION    := 0.15
 const DASH_COOLDOWN    := 0.8
 
 const ATK_L_DURATION   := 0.30
-const ATK_L_HIT_START  := 0.07   # hitbox on (seconds into state)
-const ATK_L_HIT_END    := 0.18   # hitbox off
-const ATK_L_CANCEL_AT  := 0.14   # allow combo buffer from here
+const ATK_L_HIT_START  := 0.07
+const ATK_L_HIT_END    := 0.18
+const ATK_L_CANCEL_AT  := 0.14
 
 const ATK_H_DURATION   := 0.60
 const ATK_H_HIT_START  := 0.18
 const ATK_H_HIT_END    := 0.40
 
 const PARRY_DURATION   := 0.40
-const PARRY_DEFLECT    := 0.15   # active parry window (first N seconds)
+const PARRY_DEFLECT    := 0.15
 
 const HURT_DURATION    := 0.35
 const IFRAMES_DURATION := 0.60
@@ -51,9 +51,10 @@ var coyote_timer        := 0.0
 var jump_buffer_timer   := 0.0
 var was_on_floor        := false
 
-@onready var sprite   : Sprite2D         = $Sprite2D
-@onready var hitbox   : Area2D           = $Hitbox
-@onready var hb_shape : CollisionShape2D = $Hitbox/CollisionShape2D
+@onready var sprite        : Sprite2D         = $Sprite2D
+@onready var hitbox        : Area2D           = $Hitbox
+@onready var hb_shape      : CollisionShape2D = $Hitbox/CollisionShape2D
+@onready var weapon_system = $WeaponSystem
 
 
 func _ready() -> void:
@@ -71,6 +72,11 @@ func _physics_process(delta: float) -> void:
 	_run_state(delta)
 
 
+# ── API pública ───────────────────────────────────────────────────────────────
+func get_weapon_system():
+	return weapon_system
+
+
 # ── State dispatcher ──────────────────────────────────────────────────────────
 func _run_state(delta: float) -> void:
 	match state:
@@ -78,22 +84,23 @@ func _run_state(delta: float) -> void:
 			_apply_gravity(delta)
 			_move(delta)
 			_handle_jump(delta)
-			if Input.is_action_just_pressed("dash"):
-				if dash_cooldown_timer <= 0.0:
+			# Bloqueia inputs de combate enquanto o prompt de troca estiver ativo
+			if not weapon_system.prompt_active:
+				if Input.is_action_just_pressed("dash") and dash_cooldown_timer <= 0.0:
 					_enter(State.DASH)
 					return
-			elif Input.is_action_just_pressed("attack_light"):
-				combo_count  = 0
-				combo_buffer = false
-				_enter(State.ATTACK_LIGHT)
-				return
-			elif Input.is_action_just_pressed("attack_heavy"):
-				combo_count = 0
-				_enter(State.ATTACK_HEAVY)
-				return
-			elif Input.is_action_just_pressed("parry"):
-				_enter(State.PARRY)
-				return
+				elif Input.is_action_just_pressed("attack_light"):
+					combo_count  = 0
+					combo_buffer = false
+					_enter(State.ATTACK_LIGHT)
+					return
+				elif Input.is_action_just_pressed("attack_heavy"):
+					combo_count = 0
+					_enter(State.ATTACK_HEAVY)
+					return
+				elif Input.is_action_just_pressed("parry"):
+					_enter(State.PARRY)
+					return
 			move_and_slide()
 			was_on_floor = is_on_floor()
 			_update_ground_state()
@@ -108,12 +115,14 @@ func _run_state(delta: float) -> void:
 			was_on_floor = is_on_floor()
 
 		State.ATTACK_LIGHT:
+			var spd: float = weapon_system.get_attack_speed()
+			var t: float   = state_time * spd
 			_apply_gravity(delta)
 			velocity.x = move_toward(velocity.x, 0.0, FRICTION * 2.0 * delta)
-			_set_hitbox(state_time >= ATK_L_HIT_START and state_time < ATK_L_HIT_END)
-			if state_time >= ATK_L_CANCEL_AT and Input.is_action_just_pressed("attack_light"):
+			_set_hitbox(t >= ATK_L_HIT_START and t < ATK_L_HIT_END)
+			if t >= ATK_L_CANCEL_AT and Input.is_action_just_pressed("attack_light"):
 				combo_buffer = true
-			if state_time >= ATK_L_DURATION:
+			if t >= ATK_L_DURATION:
 				_set_hitbox(false)
 				if combo_buffer and combo_count < 3:
 					combo_buffer = false
@@ -126,10 +135,12 @@ func _run_state(delta: float) -> void:
 			was_on_floor = is_on_floor()
 
 		State.ATTACK_HEAVY:
+			var spd: float = weapon_system.get_attack_speed()
+			var t: float   = state_time * spd
 			_apply_gravity(delta)
 			velocity.x = move_toward(velocity.x, 0.0, FRICTION * 3.0 * delta)
-			_set_hitbox(state_time >= ATK_H_HIT_START and state_time < ATK_H_HIT_END)
-			if state_time >= ATK_H_DURATION:
+			_set_hitbox(t >= ATK_H_HIT_START and t < ATK_H_HIT_END)
+			if t >= ATK_H_DURATION:
 				_set_hitbox(false)
 				combo_count = 0
 				_enter(State.IDLE)
@@ -163,7 +174,7 @@ func _enter(new_state: State) -> void:
 	if state in [State.ATTACK_LIGHT, State.ATTACK_HEAVY]:
 		_set_hitbox(false)
 	if state == State.DASH:
-		is_invincible = false
+		is_invincible     = false
 		sprite.modulate.a = 1.0
 
 	state      = new_state
@@ -183,14 +194,16 @@ func _enter(new_state: State) -> void:
 		State.HURT:
 			is_invincible = true
 			iframes_timer = IFRAMES_DURATION
+		State.DEAD:
+			weapon_system.clear_on_death()
 
 
 # ── Movement helpers ──────────────────────────────────────────────────────────
 func _move(delta: float) -> void:
 	var dir := Input.get_axis("move_left", "move_right")
 	if dir != 0.0:
-		velocity.x   = move_toward(velocity.x, dir * SPEED, ACCELERATION * delta)
-		facing_right = dir > 0.0
+		velocity.x    = move_toward(velocity.x, dir * SPEED, ACCELERATION * delta)
+		facing_right  = dir > 0.0
 		sprite.flip_h = not facing_right
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, FRICTION * delta)
@@ -264,7 +277,12 @@ func _set_hitbox(active: bool) -> void:
 
 
 func _position_hitbox() -> void:
-	hitbox.position.x = 10.0 if facing_right else -10.0
+	var reach: float = weapon_system.get_reach()
+	var shape := hb_shape.shape as RectangleShape2D
+	if shape:
+		shape.size.x = reach
+	# posiciona a hitbox a partir da borda do corpo do jogador
+	hitbox.position.x = (4.0 + reach * 0.5) if facing_right else -(4.0 + reach * 0.5)
 
 
 # ── Damage API ────────────────────────────────────────────────────────────────
@@ -289,8 +307,24 @@ func receive_attack(damage: int, knockback: Vector2, attacker: Node) -> void:
 func _on_hitbox_body_entered(body: Node2D) -> void:
 	if body == self or not body.has_method("receive_hit"):
 		return
-	var is_heavy  := state == State.ATTACK_HEAVY
-	var dir       := 1.0 if facing_right else -1.0
-	var knockback := Vector2(dir * (200.0 if is_heavy else 80.0),
-	                         -100.0 if is_heavy else -40.0)
-	body.receive_hit(2 if is_heavy else 1, knockback)
+
+	var weapon              = weapon_system.get_weapon()
+	var is_heavy: bool      = state == State.ATTACK_HEAVY
+	var dmg: float          = (weapon.damage_heavy if is_heavy else weapon.damage_light) \
+	                          if weapon else (10.0 if is_heavy else 5.0)
+	var kbf: float          = weapon.knockback_force if weapon else 1.0
+	var dir: float          = 1.0 if facing_right else -1.0
+	var kb: Vector2         = Vector2(dir * (200.0 if is_heavy else 80.0) * kbf,
+	                                  -100.0 if is_heavy else -40.0)
+
+	if weapon and weapon.special_effect == "knockback_up" and is_heavy:
+		kb.y = -220.0
+
+	print("[Hit] %s → %s  dmg:%.0f  efeito:%s" % [
+		name, body.name, dmg,
+		weapon.special_effect if weapon else "none"
+	])
+	body.receive_hit(int(dmg), kb)
+
+	if weapon and weapon.special_effect == "poison" and body.has_method("apply_poison"):
+		body.apply_poison(2.0, 3.0)

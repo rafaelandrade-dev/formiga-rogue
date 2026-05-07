@@ -1,7 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player/Player.tscn" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/DummyEnemy.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/shared/WeaponPickup.tscn" id="3"]
+[ext_resource type="Resource" path="res://resources/weapons/mandibulas.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/weapons/espinho_cacto.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/weapons/ferrao_abelha.tres" id="6"]
 
 [sub_resource type="RectangleShape2D" id="1"]
 size = Vector2(800, 12)
@@ -20,7 +24,19 @@ position = Vector2(80, 80)
 [node name="Camera2D" type="Camera2D" parent="Player"]
 
 [node name="DummyEnemy" parent="." instance=ExtResource("2")]
-position = Vector2(200, 80)
+position = Vector2(220, 80)
+
+[node name="Pickup_Mandibulas" parent="." instance=ExtResource("3")]
+position = Vector2(120, 162)
+weapon_data = ExtResource("4")
+
+[node name="Pickup_Espinho" parent="." instance=ExtResource("3")]
+position = Vector2(160, 162)
+weapon_data = ExtResource("5")
+
+[node name="Pickup_Ferrao" parent="." instance=ExtResource("3")]
+position = Vector2(200, 162)
+weapon_data = ExtResource("6")
 
 [node name="Floor" type="StaticBody2D" parent="."]
 collision_layer = 4
