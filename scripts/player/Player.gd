@@ -29,6 +29,8 @@ const PARRY_DEFLECT    := 0.15
 const HURT_DURATION    := 0.35
 const IFRAMES_DURATION := 0.60
 
+const SPRITE_SCALE     := 0.07
+
 # ── State machine ─────────────────────────────────────────────────────────────
 enum State { IDLE, RUN, JUMP, ATTACK_LIGHT, ATTACK_HEAVY, PARRY, DASH, HURT, DEAD }
 
@@ -51,16 +53,14 @@ var coyote_timer        := 0.0
 var jump_buffer_timer   := 0.0
 var was_on_floor        := false
 
-@onready var sprite        : Sprite2D         = $Sprite2D
-@onready var hitbox        : Area2D           = $Hitbox
-@onready var hb_shape      : CollisionShape2D = $Hitbox/CollisionShape2D
+@onready var anim_sprite : AnimatedSprite2D  = $AnimatedSprite2D
+@onready var hitbox      : Area2D            = $Hitbox
+@onready var hb_shape    : CollisionShape2D  = $Hitbox/CollisionShape2D
 @onready var weapon_system = $WeaponSystem
 
 
 func _ready() -> void:
-	var img := Image.create(8, 12, false, Image.FORMAT_RGB8)
-	img.fill(Color(0.2, 0.8, 0.3))
-	sprite.texture = ImageTexture.create_from_image(img)
+	_build_sprite_frames()
 	_set_hitbox(false)
 	hitbox.body_entered.connect(_on_hitbox_body_entered)
 
@@ -70,6 +70,54 @@ func _physics_process(delta: float) -> void:
 	_tick_iframes(delta)
 	_tick_dash_cooldown(delta)
 	_run_state(delta)
+	_update_animation()
+
+
+# ── Sprite setup ──────────────────────────────────────────────────────────────
+func _build_sprite_frames() -> void:
+	var frames := SpriteFrames.new()
+	frames.remove_animation("default")
+	_add_strip_frames(frames, "idle",         "res://assets/sprites/mainCharacter.png", 1, 500, 500, 0,   0, true,  4.0)
+	_add_strip_frames(frames, "run",          "res://assets/sprites/running.png",       6, 206, 202, 0,   0, true,  10.0)
+	_add_strip_frames(frames, "jump",         "res://assets/sprites/jumping.png",       4, 250, 249, 0,   0, false, 8.0)
+	_add_strip_frames(frames, "dash",         "res://assets/sprites/dash.png",          4, 250, 249, 0,   0, false, 12.0)
+	_add_strip_frames(frames, "attack_light", "res://assets/sprites/lightAttack.png",   4, 250, 249, 0,   0, false, 14.0)
+	_add_strip_frames(frames, "attack_heavy", "res://assets/sprites/heavyAttack.png",   5, 204, 154, 0,   0, false, 8.0)
+	_add_strip_frames(frames, "parry",        "res://assets/sprites/parry.png",         4, 250, 249, 0,   0, false, 10.0)
+	_add_strip_frames(frames, "hurt",         "res://assets/sprites/danoMorte.png",     4, 125, 249, 0,   0, false, 10.0)
+	_add_strip_frames(frames, "dead",         "res://assets/sprites/danoMorte.png",     4, 125, 249, 500, 0, false, 8.0)
+	anim_sprite.sprite_frames = frames
+	anim_sprite.scale = Vector2(SPRITE_SCALE, SPRITE_SCALE)
+	anim_sprite.play("idle")
+
+
+func _add_strip_frames(frames: SpriteFrames, anim: String, path: String, count: int, fw: int, fh: int, ox: int, oy: int, loop: bool, fps: float) -> void:
+	frames.add_animation(anim)
+	frames.set_animation_loop(anim, loop)
+	frames.set_animation_speed(anim, fps)
+	var tex: Texture2D = load(path)
+	for i in count:
+		var at := AtlasTexture.new()
+		at.atlas = tex
+		at.region = Rect2(ox + i * fw, oy, fw, fh)
+		frames.add_frame(anim, at)
+
+
+func _update_animation() -> void:
+	var anim: String
+	match state:
+		State.RUN:          anim = "run"
+		State.JUMP:         anim = "jump"
+		State.DASH:         anim = "dash"
+		State.ATTACK_LIGHT: anim = "attack_light"
+		State.ATTACK_HEAVY: anim = "attack_heavy"
+		State.PARRY:        anim = "parry"
+		State.HURT:         anim = "hurt"
+		State.DEAD:         anim = "dead"
+		_:                  anim = "idle"
+	if anim_sprite.animation != anim:
+		anim_sprite.play(anim)
+	anim_sprite.flip_h = not facing_right
 
 
 # ── API pública ───────────────────────────────────────────────────────────────
@@ -174,8 +222,8 @@ func _enter(new_state: State) -> void:
 	if state in [State.ATTACK_LIGHT, State.ATTACK_HEAVY]:
 		_set_hitbox(false)
 	if state == State.DASH:
-		is_invincible     = false
-		sprite.modulate.a = 1.0
+		is_invincible          = false
+		anim_sprite.modulate.a = 1.0
 
 	state      = new_state
 	state_time = 0.0
@@ -202,9 +250,8 @@ func _enter(new_state: State) -> void:
 func _move(delta: float) -> void:
 	var dir := Input.get_axis("move_left", "move_right")
 	if dir != 0.0:
-		velocity.x    = move_toward(velocity.x, dir * SPEED, ACCELERATION * delta)
-		facing_right  = dir > 0.0
-		sprite.flip_h = not facing_right
+		velocity.x   = move_toward(velocity.x, dir * SPEED, ACCELERATION * delta)
+		facing_right = dir > 0.0
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, FRICTION * delta)
 
@@ -253,10 +300,10 @@ func _tick_iframes(delta: float) -> void:
 		return
 	iframes_timer -= delta
 	if state == State.HURT:
-		sprite.modulate.a = 0.0 if fmod(iframes_timer, 0.15) < 0.075 else 1.0
+		anim_sprite.modulate.a = 0.0 if fmod(iframes_timer, 0.15) < 0.075 else 1.0
 	if iframes_timer <= 0.0 and state != State.DASH:
-		is_invincible     = false
-		sprite.modulate.a = 1.0
+		is_invincible          = false
+		anim_sprite.modulate.a = 1.0
 
 
 func _update_ground_state() -> void:
@@ -308,14 +355,14 @@ func _on_hitbox_body_entered(body: Node2D) -> void:
 	if body == self or not body.has_method("receive_hit"):
 		return
 
-	var weapon              = weapon_system.get_weapon()
-	var is_heavy: bool      = state == State.ATTACK_HEAVY
-	var dmg: float          = (weapon.damage_heavy if is_heavy else weapon.damage_light) \
-	                          if weapon else (10.0 if is_heavy else 5.0)
-	var kbf: float          = weapon.knockback_force if weapon else 1.0
-	var dir: float          = 1.0 if facing_right else -1.0
-	var kb: Vector2         = Vector2(dir * (200.0 if is_heavy else 80.0) * kbf,
-	                                  -100.0 if is_heavy else -40.0)
+	var weapon         = weapon_system.get_weapon()
+	var is_heavy: bool = state == State.ATTACK_HEAVY
+	var dmg: float     = (weapon.damage_heavy if is_heavy else weapon.damage_light) \
+	                     if weapon else (10.0 if is_heavy else 5.0)
+	var kbf: float     = weapon.knockback_force if weapon else 1.0
+	var dir: float     = 1.0 if facing_right else -1.0
+	var kb: Vector2    = Vector2(dir * (200.0 if is_heavy else 80.0) * kbf,
+	                             -100.0 if is_heavy else -40.0)
 
 	if weapon and weapon.special_effect == "knockback_up" and is_heavy:
 		kb.y = -220.0

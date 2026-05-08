@@ -8,9 +8,13 @@ extends Area2D
 func _ready() -> void:
 	if weapon_data == null:
 		return
-	var img := Image.create(8, 8, false, Image.FORMAT_RGB8)
-	img.fill(weapon_data.pickup_color)
-	sprite.texture = ImageTexture.create_from_image(img)
+	if weapon_data.sprite_path != "":
+		sprite.texture = load(weapon_data.sprite_path)
+		sprite.scale   = Vector2(0.03, 0.03)
+	else:
+		var img := Image.create(8, 8, false, Image.FORMAT_RGB8)
+		img.fill(weapon_data.pickup_color)
+		sprite.texture = ImageTexture.create_from_image(img)
 	body_entered.connect(_on_body_entered)
 
 

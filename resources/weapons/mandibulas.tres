@@ -12,3 +12,4 @@ knockback_force = 1.0
 reach = 16.0
 special_effect = "none"
 pickup_color = Color(0.2, 0.8, 1.0, 1.0)
+sprite_path = "res://assets/sprites/Itens_provisorios.png"

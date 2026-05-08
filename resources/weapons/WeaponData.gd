@@ -9,3 +9,4 @@ class_name WeaponData
 @export var reach: float = 16.0          # alcance da hitbox em pixels
 @export var special_effect: String = "none"  # "none", "poison", "slow", "knockback_up"
 @export var pickup_color: Color = Color.WHITE
+@export var sprite_path: String = ""
