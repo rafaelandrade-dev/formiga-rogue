@@ -29,7 +29,8 @@ const PARRY_DEFLECT    := 0.15
 const HURT_DURATION    := 0.35
 const IFRAMES_DURATION := 0.60
 
-const SPRITE_SCALE     := 0.07
+const SPRITE_SCALE     := 0.25  # 64px frame → ~16px na tela
+const SPRITE_OFFSET_Y  := -1.0  # alinha os pés do sprite com o fundo da CollisionShape
 
 # ── State machine ─────────────────────────────────────────────────────────────
 enum State { IDLE, RUN, JUMP, ATTACK_LIGHT, ATTACK_HEAVY, PARRY, DASH, HURT, DEAD }
@@ -76,18 +77,24 @@ func _physics_process(delta: float) -> void:
 # ── Sprite setup ──────────────────────────────────────────────────────────────
 func _build_sprite_frames() -> void:
 	var frames := SpriteFrames.new()
+	var rat := "res://assets/sprites/rat.png"
+	var fw   := 64; var fh := 64
+	# rat.png: grid 64x64, 13 colunas x 54 linhas (LPC format)
+	# Grupos de 4 linhas por animação: linha 0=cima 1=esq 2=baixo 3=dir
+	# Ajuste os índices de linha abaixo conforme o visual real:
 	frames.remove_animation("default")
-	_add_strip_frames(frames, "idle",         "res://assets/sprites/mainCharacter.png", 1, 500, 500, 0,   0, true,  4.0)
-	_add_strip_frames(frames, "run",          "res://assets/sprites/running.png",       6, 206, 202, 0,   0, true,  10.0)
-	_add_strip_frames(frames, "jump",         "res://assets/sprites/jumping.png",       4, 250, 249, 0,   0, false, 8.0)
-	_add_strip_frames(frames, "dash",         "res://assets/sprites/dash.png",          4, 250, 249, 0,   0, false, 12.0)
-	_add_strip_frames(frames, "attack_light", "res://assets/sprites/lightAttack.png",   4, 250, 249, 0,   0, false, 14.0)
-	_add_strip_frames(frames, "attack_heavy", "res://assets/sprites/heavyAttack.png",   5, 204, 154, 0,   0, false, 8.0)
-	_add_strip_frames(frames, "parry",        "res://assets/sprites/parry.png",         4, 250, 249, 0,   0, false, 10.0)
-	_add_strip_frames(frames, "hurt",         "res://assets/sprites/danoMorte.png",     4, 125, 249, 0,   0, false, 10.0)
-	_add_strip_frames(frames, "dead",         "res://assets/sprites/danoMorte.png",     4, 125, 249, 500, 0, false, 8.0)
+	_add_strip_frames(frames, "idle",         rat, 2,  fw, fh, 0, 23*fh, true,  3.0)  # linha 23 – idle/respiração (dir)
+	_add_strip_frames(frames, "run",          rat, 9,  fw, fh, 0, 11*fh, true,  10.0) # linha 11 – walk (dir)
+	_add_strip_frames(frames, "jump",         rat, 8,  fw, fh, 0,  7*fh, false, 8.0)  # linha 7  – thrust (dir)
+	_add_strip_frames(frames, "dash",         rat, 5,  fw, fh, 0, 29*fh, false, 14.0) # linha 29 – 5-frame anim (dir)
+	_add_strip_frames(frames, "attack_light", rat, 6,  fw, fh, 0, 15*fh, false, 12.0) # linha 15 – slash (dir)
+	_add_strip_frames(frames, "attack_heavy", rat, 8,  fw, fh, 0, 41*fh, false, 8.0)  # linha 41 – outro ataque (dir)
+	_add_strip_frames(frames, "parry",        rat, 7,  fw, fh, 0,  3*fh, false, 10.0) # linha 3  – spellcast (dir)
+	_add_strip_frames(frames, "hurt",         rat, 2,  fw, fh, 0, 45*fh, false, 10.0) # linha 45 – hurt (dir)
+	_add_strip_frames(frames, "dead",         rat, 3,  fw, fh, 0, 37*fh, false, 6.0)  # linha 37 – morte (dir)
 	anim_sprite.sprite_frames = frames
-	anim_sprite.scale = Vector2(SPRITE_SCALE, SPRITE_SCALE)
+	anim_sprite.scale      = Vector2(SPRITE_SCALE, SPRITE_SCALE)
+	anim_sprite.position.y = SPRITE_OFFSET_Y
 	anim_sprite.play("idle")
 
 
