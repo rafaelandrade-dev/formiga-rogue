@@ -85,6 +85,10 @@ weapon_swap={
 2d_physics/layer_5="enemy_hitbox"
 2d_physics/layer_6="items"
 
+[autoload]
+
+ResourceManager="*res://scripts/systems/ResourceManager.gd"
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

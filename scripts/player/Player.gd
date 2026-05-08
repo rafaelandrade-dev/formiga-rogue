@@ -27,10 +27,13 @@ const PARRY_DURATION   := 0.40
 const PARRY_DEFLECT    := 0.15
 
 const HURT_DURATION    := 0.35
-const IFRAMES_DURATION := 0.60
+const IFRAMES_DURATION := 0.80
+const HURT_FLASH_TIME  := 0.20  # duração do flash vermelho
 
 const SPRITE_SCALE     := 0.25  # 64px frame → ~16px na tela
 const SPRITE_OFFSET_Y  := -1.0  # alinha os pés do sprite com o fundo da CollisionShape
+
+const GAME_OVER_SCENE  := "res://scenes/ui/GameOverScreen.tscn"
 
 # ── State machine ─────────────────────────────────────────────────────────────
 enum State { IDLE, RUN, JUMP, ATTACK_LIGHT, ATTACK_HEAVY, PARRY, DASH, HURT, DEAD }
@@ -41,9 +44,8 @@ var state_time : float = 0.0
 # ── Combat ────────────────────────────────────────────────────────────────────
 var combo_count  := 0
 var combo_buffer := false
-var hp           := 3
-var is_invincible:= false
-var iframes_timer:= 0.0
+var is_invincible := false
+var iframes_timer := 0.0
 
 # ── Movement ──────────────────────────────────────────────────────────────────
 var double_jump_used    := false
@@ -54,16 +56,19 @@ var coyote_timer        := 0.0
 var jump_buffer_timer   := 0.0
 var was_on_floor        := false
 
-@onready var anim_sprite : AnimatedSprite2D  = $AnimatedSprite2D
-@onready var hitbox      : Area2D            = $Hitbox
-@onready var hb_shape    : CollisionShape2D  = $Hitbox/CollisionShape2D
-@onready var weapon_system = $WeaponSystem
+@onready var anim_sprite     : AnimatedSprite2D  = $AnimatedSprite2D
+@onready var hitbox          : Area2D            = $Hitbox
+@onready var hb_shape        : CollisionShape2D  = $Hitbox/CollisionShape2D
+@onready var weapon_system   = $WeaponSystem
+@onready var health_component = $HealthComponent
 
 
 func _ready() -> void:
 	_build_sprite_frames()
 	_set_hitbox(false)
 	hitbox.body_entered.connect(_on_hitbox_body_entered)
+	health_component.health_changed.connect(_on_health_changed)
+	health_component.died.connect(_on_health_died)
 
 
 func _physics_process(delta: float) -> void:
@@ -132,6 +137,17 @@ func get_weapon_system():
 	return weapon_system
 
 
+# ── HealthComponent callbacks ─────────────────────────────────────────────────
+func _on_health_changed(old_val: float, new_val: float) -> void:
+	if new_val < old_val and new_val > 0.0:
+		_enter(State.HURT)
+	print("[Player] HP: %.0f / %.0f" % [new_val, health_component.max_health])
+
+
+func _on_health_died() -> void:
+	_enter(State.DEAD)
+
+
 # ── State dispatcher ──────────────────────────────────────────────────────────
 func _run_state(delta: float) -> void:
 	match state:
@@ -139,7 +155,6 @@ func _run_state(delta: float) -> void:
 			_apply_gravity(delta)
 			_move(delta)
 			_handle_jump(delta)
-			# Bloqueia inputs de combate enquanto o prompt de troca estiver ativo
 			if not weapon_system.prompt_active:
 				if Input.is_action_just_pressed("dash") and dash_cooldown_timer <= 0.0:
 					_enter(State.DASH)
@@ -230,7 +245,7 @@ func _enter(new_state: State) -> void:
 		_set_hitbox(false)
 	if state == State.DASH:
 		is_invincible          = false
-		anim_sprite.modulate.a = 1.0
+		anim_sprite.modulate   = Color(1, 1, 1, 1)
 
 	state      = new_state
 	state_time = 0.0
@@ -251,6 +266,7 @@ func _enter(new_state: State) -> void:
 			iframes_timer = IFRAMES_DURATION
 		State.DEAD:
 			weapon_system.clear_on_death()
+			get_tree().create_timer(1.5).timeout.connect(_show_game_over)
 
 
 # ── Movement helpers ──────────────────────────────────────────────────────────
@@ -306,11 +322,14 @@ func _tick_iframes(delta: float) -> void:
 	if iframes_timer <= 0.0:
 		return
 	iframes_timer -= delta
-	if state == State.HURT:
-		anim_sprite.modulate.a = 0.0 if fmod(iframes_timer, 0.15) < 0.075 else 1.0
+	var elapsed: float = IFRAMES_DURATION - iframes_timer
+	if elapsed < HURT_FLASH_TIME:
+		anim_sprite.modulate = Color(1.5, 0.3, 0.3, 1.0)
+	else:
+		anim_sprite.modulate = Color(1.0, 1.0, 1.0, 0.0 if fmod(iframes_timer, 0.15) < 0.075 else 1.0)
 	if iframes_timer <= 0.0 and state != State.DASH:
-		is_invincible          = false
-		anim_sprite.modulate.a = 1.0
+		is_invincible        = false
+		anim_sprite.modulate = Color(1.0, 1.0, 1.0, 1.0)
 
 
 func _update_ground_state() -> void:
@@ -335,8 +354,12 @@ func _position_hitbox() -> void:
 	var shape := hb_shape.shape as RectangleShape2D
 	if shape:
 		shape.size.x = reach
-	# posiciona a hitbox a partir da borda do corpo do jogador
 	hitbox.position.x = (4.0 + reach * 0.5) if facing_right else -(4.0 + reach * 0.5)
+
+
+func _show_game_over() -> void:
+	var screen = load(GAME_OVER_SCENE).instantiate()
+	get_tree().root.add_child(screen)
 
 
 # ── Damage API ────────────────────────────────────────────────────────────────
@@ -349,12 +372,8 @@ func receive_attack(damage: int, knockback: Vector2, attacker: Node) -> void:
 		return
 	if is_invincible:
 		return
-	hp -= damage
 	velocity = knockback
-	if hp <= 0:
-		_enter(State.DEAD)
-	else:
-		_enter(State.HURT)
+	health_component.take_damage(float(damage), attacker.global_position)
 
 
 # ── Hitbox hit detection ──────────────────────────────────────────────────────

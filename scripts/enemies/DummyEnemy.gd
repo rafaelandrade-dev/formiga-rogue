@@ -5,7 +5,8 @@ const ATTACK_INTERVAL  := 2.0
 const ATTACK_ACTIVE    := 0.5
 const STAGGER_DURATION := 0.8
 
-var hp: float     = 5.0
+const RESOURCE_PICKUP_SCENE = preload("res://scenes/shared/ResourcePickup.tscn")
+
 var attack_timer  := 1.0
 var is_attacking  := false
 var is_staggered  := false
@@ -16,9 +17,10 @@ var poison_dps         := 0.0
 var poison_timer       := 0.0
 var poison_print_timer := 0.0
 
-@onready var sprite       : Sprite2D         = $Sprite2D
-@onready var attack_area  : Area2D           = $AttackArea
-@onready var attack_shape : CollisionShape2D = $AttackArea/CollisionShape2D
+@onready var sprite           : Sprite2D         = $Sprite2D
+@onready var attack_area      : Area2D           = $AttackArea
+@onready var attack_shape     : CollisionShape2D = $AttackArea/CollisionShape2D
+@onready var health_component = $HealthComponent
 
 
 func _ready() -> void:
@@ -27,6 +29,19 @@ func _ready() -> void:
 	sprite.texture = ImageTexture.create_from_image(img)
 	_set_attack(false)
 	attack_area.body_entered.connect(_on_attack_body_entered)
+	health_component.died.connect(_on_died)
+
+
+func _on_died() -> void:
+	var count := randi_range(1, 3)
+	for i in count:
+		var pickup = RESOURCE_PICKUP_SCENE.instantiate()
+		pickup.resource_type = "migalhas"
+		pickup.amount        = 1
+		pickup.global_position = global_position + Vector2(randf_range(-8.0, 8.0), 0.0)
+		get_parent().add_child(pickup)
+	print("[DummyEnemy] Morreu — dropou %d migalha(s)" % count)
+	queue_free()
 
 
 func _physics_process(delta: float) -> void:
@@ -60,12 +75,12 @@ func _tick_poison(delta: float) -> void:
 		return
 	poison_timer       -= delta
 	poison_print_timer -= delta
-	hp                 -= poison_dps * delta
+	health_component.take_damage(poison_dps * delta, global_position)
 	if poison_print_timer <= 0.0:
 		poison_print_timer = 1.0
-		print("[DummyEnemy] Veneno ativo — HP restante: %.1f (%.1fs restante)" % [hp, max(poison_timer, 0.0)])
-	if hp <= 0.0:
-		queue_free()
+		print("[DummyEnemy] Veneno — HP: %.1f (%.1fs restante)" % [
+			health_component.current_health, max(poison_timer, 0.0)
+		])
 
 
 func _set_attack(active: bool) -> void:
@@ -75,10 +90,8 @@ func _set_attack(active: bool) -> void:
 func receive_hit(damage: int, _knockback: Vector2) -> void:
 	if is_staggered:
 		return
-	hp -= damage
-	print("[DummyEnemy] Recebeu %d de dano — HP: %.1f" % [damage, hp])
-	if hp <= 0.0:
-		queue_free()
+	health_component.take_damage(float(damage), global_position)
+	print("[DummyEnemy] Recebeu %d de dano — HP: %.1f" % [damage, health_component.current_health])
 
 
 func receive_stagger() -> void:
@@ -93,7 +106,7 @@ func receive_stagger() -> void:
 func apply_poison(dps: float, duration: float) -> void:
 	poison_dps         = dps
 	poison_timer       = duration
-	poison_print_timer = 0.0   # imprime imediatamente na primeira tick
+	poison_print_timer = 0.0
 	print("[DummyEnemy] Envenenado: %.1f dmg/s por %.1fs" % [dps, duration])
 
 

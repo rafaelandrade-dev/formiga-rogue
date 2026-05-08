@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/Player.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/player/PlayerHitbox.tscn" id="2"]
 [ext_resource type="Script" path="res://scripts/systems/WeaponSystem.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/systems/HealthComponent.gd" id="4"]
 
 [sub_resource type="RectangleShape2D" id="1"]
 size = Vector2(8, 12)
@@ -21,3 +22,7 @@ shape = SubResource("1")
 
 [node name="WeaponSystem" type="Node" parent="."]
 script = ExtResource("3")
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("4")
+max_health = 100.0
