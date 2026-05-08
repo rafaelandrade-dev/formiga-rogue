@@ -1,8 +1,11 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/player/Player.tscn" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/enemies/DummyEnemy.tscn" id="2"]
 [ext_resource type="PackedScene" path="res://scenes/shared/WeaponPickup.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/BesouroPatrulheiro.tscn" id="7"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/AranhaEmboscadora.tscn" id="8"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/GafanhotoCaminhante.tscn" id="9"]
 [ext_resource type="Resource" path="res://resources/weapons/mandibulas.tres" id="4"]
 [ext_resource type="Resource" path="res://resources/weapons/espinho_cacto.tres" id="5"]
 [ext_resource type="Resource" path="res://resources/weapons/ferrao_abelha.tres" id="6"]
@@ -25,6 +28,15 @@ position = Vector2(80, 80)
 
 [node name="DummyEnemy" parent="." instance=ExtResource("2")]
 position = Vector2(220, 80)
+
+[node name="BesouroPatrulheiro" parent="." instance=ExtResource("7")]
+position = Vector2(500, 80)
+
+[node name="AranhaEmboscadora" parent="." instance=ExtResource("8")]
+position = Vector2(620, 80)
+
+[node name="GafanhotoCaminhante" parent="." instance=ExtResource("9")]
+position = Vector2(700, 80)
 
 [node name="Pickup_Mandibulas" parent="." instance=ExtResource("3")]
 position = Vector2(120, 162)
