@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/Zone1.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/shared/WeaponPickup.tscn" id="2"]
 [ext_resource type="Resource" path="res://resources/weapons/mandibulas.tres" id="3"]
 [ext_resource type="Resource" path="res://resources/weapons/ferrao_abelha.tres" id="4"]
 [ext_resource type="PackedScene" path="res://scenes/shared/ResourcePickup.tscn" id="5"]
+[ext_resource type="PackedScene" path="res://scenes/world/Zone1Boss.tscn" id="6"]
 
 [node name="Zone1" type="Node2D"]
 script = ExtResource("1")
@@ -80,6 +81,4 @@ position = Vector2(1040, 148)
 resource_type = "nectar"
 amount = 5
 
-[node name="BossGate" type="Polygon2D" parent="."]
-color = Color(0.45, 0.0, 0.0, 0.9)
-polygon = PackedVector2Array(1312, -48, 1344, -48, 1344, 176, 1312, 176)
+[node name="Zone1Boss" parent="." instance=ExtResource("6")]

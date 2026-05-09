@@ -1,0 +1,22 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/Zone1Boss.gd" id="1"]
+
+[sub_resource type="RectangleShape2D" id="1"]
+size = Vector2(32, 200)
+
+[node name="Zone1Boss" type="Node2D"]
+script = ExtResource("1")
+
+[node name="EntryTrigger" type="Area2D" parent="."]
+position = Vector2(1376, 80)
+collision_layer = 0
+collision_mask = 1
+monitoring = true
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="EntryTrigger"]
+shape = SubResource("1")
+
+[node name="BossSpawn" type="Marker2D" parent="."]
+position = Vector2(1624, 50)
