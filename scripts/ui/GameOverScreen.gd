@@ -32,4 +32,5 @@ func _build_ui() -> void:
 
 
 func _on_restart() -> void:
+	queue_free()
 	get_tree().reload_current_scene()

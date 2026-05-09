@@ -11,9 +11,13 @@ config_version=5
 [application]
 
 config/name="FormigaRogue"
-run/main_scene="res://scenes/world/TestLevel.tscn"
+run/main_scene="res://scenes/world/Zone1.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
+
+[autoload]
+
+ResourceManager="*res://scripts/systems/ResourceManager.gd"
 
 [display]
 
@@ -84,10 +88,6 @@ weapon_swap={
 2d_physics/layer_4="player_hitbox"
 2d_physics/layer_5="enemy_hitbox"
 2d_physics/layer_6="items"
-
-[autoload]
-
-ResourceManager="*res://scripts/systems/ResourceManager.gd"
 
 [physics]
 
